@@ -1,44 +1,53 @@
-// Sélection des éléments de l'interface
+// ==========================================
+// 1. SÉLECTION DES ÉLÉMENTS DU DOM
+// ==========================================
 const video = document.getElementById('camera-stream');
 const canvas = document.getElementById('snapshot-canvas');
 const captureBtn = document.getElementById('capture-btn');
 const statusText = document.getElementById('status-text');
 const audioPanel = document.getElementById('audio-panel');
+const playBtn = document.getElementById('play-btn');
+const stopBtn = document.getElementById('stop-btn');
 
-// 1. Allumer la caméra
+
+// ==========================================
+// 2. GESTION DE LA CAMÉRA & ANALYSE
+// ==========================================
+
+// Variable pour stocker les prédictions du réseau de neurones
+let currentAudioParams = null; 
+
 async function startCamera() {
     try {
-        // On demande la vidéo, en privilégiant la caméra arrière (environment) sur mobile
+        // Demande la caméra arrière en priorité pour les mobiles
         const stream = await navigator.mediaDevices.getUserMedia({ 
             video: { facingMode: 'environment' } 
         });
         video.srcObject = stream;
-        statusText.innerText = "Caméra prête. Pointez une œuvre !";
+        statusText.innerText = "Caméra prête. Pointez une œuvre d'art !";
     } catch (err) {
         console.error("Erreur d'accès à la caméra :", err);
-        statusText.innerText = "Erreur : Autorisez l'accès à la caméra.";
+        statusText.innerText = "Erreur : Autorisez l'accès à la caméra du navigateur.";
     }
 }
 
-// 2. Capturer l'image et l'envoyer à FastAPI
 async function captureAndAnalyze() {
-    // Étape A : Régler la taille du canvas sur celle de la vidéo et dessiner l'image
+    // A. Régler la taille du canvas sur celle de la vidéo et "prendre la photo"
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    // Étape B : Convertir le canvas en fichier image (Blob)
+    // B. Extraire l'image du canvas sous forme de fichier JPEG (Blob)
     canvas.toBlob(async (blob) => {
-        statusText.innerText = "Analyse en cours par l'IA... 🧠";
-        captureBtn.disabled = true; // On bloque le bouton pendant l'envoi
+        statusText.innerText = "Analyse en cours par le ResNet... 🧠";
+        captureBtn.disabled = true;
 
-        // On emballe l'image comme si c'était un formulaire HTML classique
         const formData = new FormData();
         formData.append("file", blob, "capture.jpg");
 
         try {
-            // Étape C : Envoi de la requête POST vers ton API Python locale
+            // C. Appel à l'API PyTorch locale
             const response = await fetch("http://localhost:8000/analyze", {
                 method: "POST",
                 body: formData
@@ -46,29 +55,104 @@ async function captureAndAnalyze() {
 
             if (!response.ok) throw new Error("Le serveur FastAPI a renvoyé une erreur.");
 
-            // Étape D : Récupération du JSON de PyTorch !
-            const audioParams = await response.json();
+            // D. Récupération des 10 paramètres 
+            currentAudioParams = await response.json();
             
-            console.log("Victoire ! Paramètres reçus :", audioParams);
-            statusText.innerText = "Analyse terminée !";
+            console.log("Victoire ! JSON reçu :", currentAudioParams);
+            statusText.innerText = "Analyse terminée ! Appuyez sur Jouer.";
 
-            // On cache le bouton d'analyse et on affiche les contrôles audio
+            // E. Mise à jour de l'interface
             captureBtn.classList.add("hidden");
             audioPanel.classList.remove("hidden");
 
-            // TODO: On connectera la Web Audio API ici à la prochaine étape !
-            // setupAudio(audioParams);
-
         } catch (err) {
             console.error("Erreur API :", err);
-            statusText.innerText = "Erreur de connexion au serveur.";
+            statusText.innerText = "Erreur : Le serveur FastAPI (Port 8000) est-il allumé ?";
         } finally {
             captureBtn.disabled = false;
         }
 
-    }, 'image/jpeg', 0.8); // Format JPEG avec une légère compression pour aller vite
+    }, 'image/jpeg', 0.8);
 }
 
-// 3. Lancer la machine
-startCamera();
+
+// ==========================================
+// 3. MOTEUR AUDIO (WEB AUDIO API)
+// ==========================================
+let audioCtx;
+let oscillators = [];
+let masterGain;
+
+// Gamme pentatonique mineure (en Hertz)
+const scale = [130.81, 155.56, 174.61, 196.00, 233.08, 261.63, 311.13, 349.23, 392.00, 466.16];
+
+function playSound() {
+    if (!currentAudioParams) return;
+    const params = currentAudioParams;
+
+    // Initialisation forcée après interaction utilisateur (sécurité navigateur)
+    if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    
+    stopSound(); // Nettoie avant de rejouer
+    
+    // -- CONTRÔLE DU VOLUME --
+    masterGain = audioCtx.createGain();
+    masterGain.gain.value = 0.5;
+    
+    // -- LE FILTRE (Piloté par la luminosité : param[2]) --
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'lowpass';
+    // Mapping: luminosité (0-1) => Fréquence de coupure (300Hz à 3000Hz)
+    filter.frequency.value = 300 + (params.brightness * 2700);
+    
+    // Câblage final vers les haut-parleurs
+    filter.connect(masterGain);
+    masterGain.connect(audioCtx.destination);
+
+    // -- LA GÉNÉRATION DES NOTES (Pilotée par l'harmonie et la texture) --
+    // Index de la note fondamentale dans la gamme (param[0])
+    const rootIndex = Math.floor(params.harmony * 5); 
+    const chordIntervals = [0, 2, 4]; // Création d'un accord de 3 notes
+    
+    chordIntervals.forEach((interval) => {
+        const osc = audioCtx.createOscillator();
+        
+        // Choix de la forme d'onde selon la texture de l'image (param[1])
+        const waveTypes = ['sine', 'triangle', 'sawtooth', 'square'];
+        const waveIndex = Math.floor(params.texture * 3.99); 
+        osc.type = waveTypes[waveIndex];
+        
+        // Fréquence musicale basée sur la gamme
+        osc.frequency.value = scale[rootIndex + interval];
+        
+        // Désaccordage léger pour l'épaisseur du son (param_5)
+        osc.detune.value = (params.param_5 - 0.5) * 50; 
+        
+        // Câblage de l'oscillateur au filtre
+        osc.connect(filter);
+        osc.start();
+        
+        oscillators.push(osc); 
+    });
+}
+
+function stopSound() {
+    // Arrêt propre de tous les générateurs de son en cours
+    oscillators.forEach(osc => {
+        try { osc.stop(); } catch(e) {}
+    });
+    oscillators = []; 
+}
+
+
+// ==========================================
+// 4. ÉCOUTEURS D'ÉVÉNEMENTS
+// ==========================================
 captureBtn.addEventListener('click', captureAndAnalyze);
+playBtn.addEventListener('click', playSound);
+stopBtn.addEventListener('click', stopSound);
+
+// Démarrage automatique de la caméra au chargement
+startCamera();
