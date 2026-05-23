@@ -1,0 +1,130 @@
+/* Reset basique */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background-color: #121212; /* Gris très sombre pour le côté musée */
+    color: #f5f5f5;
+    height: 100vh;
+    overflow: hidden; /* Empêche le rebond au scroll sur mobile */
+}
+
+/* Layout principal avec Flexbox */
+.app-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    padding: 2rem 1rem;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 1rem;
+}
+
+header h1 {
+    font-size: 2rem;
+    font-weight: 300;
+    letter-spacing: 2px;
+    color: #d4af37; /* Touche dorée subtile */
+}
+
+header p {
+    font-size: 0.9rem;
+    opacity: 0.7;
+    margin-top: 0.5rem;
+}
+
+/* Le cadre de la caméra */
+.viewfinder {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    /* Ratio 3:4 très courant pour les photos sur smartphone */
+    aspect-ratio: 3/4;
+    background-color: #000;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    border: 1px solid #333;
+}
+
+#camera-stream {
+    width: 100%;
+    height: 100%;
+    /* Remplira tout le cadre sans écraser l'image */
+    object-fit: cover; 
+}
+
+/* Zone des boutons */
+.controls {
+    width: 100%;
+    max-width: 400px;
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+    margin-top: 1.5rem;
+}
+
+button {
+    padding: 1.2rem;
+    font-size: 1.1rem;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: bold;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    transition: transform 0.1s ease, background-color 0.2s ease;
+}
+
+/* Effet d'appui physique */
+button:active {
+    transform: scale(0.97);
+}
+
+.primary-btn {
+    background-color: #d4af37;
+    color: #121212;
+}
+
+.secondary-btn {
+    background-color: #333;
+    color: #fff;
+    flex: 1; /* Permet aux deux boutons audio de partager la largeur */
+}
+
+.danger-btn {
+    background-color: #5a1a1a;
+    color: #fff;
+    flex: 1;
+}
+
+.audio-controls {
+    display: flex;
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Classe d'utilité pour cacher des éléments en JS */
+.hidden {
+    display: none !important;
+}
+
+/* Zone de texte indicatif en bas */
+.feedback {
+    margin-top: 1rem;
+    text-align: center;
+    font-size: 0.9rem;
+    opacity: 0.8;
+    min-height: 24px;
+}

@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <!-- Indispensable pour un rendu correct sur mobile -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Synesthésie - L'Écoute de l'Image</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <main class="app-container">
+        <header>
+            <h1>Synesthésie</h1>
+            <p>Écoutez l'œuvre d'art</p>
+        </header>
+
+        <!-- Zone daffichage de la caméra -->
+        <div class="viewfinder">
+            <!-- playsinline empêche iOS douvrir la vidéo en plein écran -->
+            <video id="camera-stream" autoplay playsinline></video>
+            
+            <!-- Le canvas sert à capturer limage, il reste invisible pour lutilisateur -->
+            <canvas id="snapshot-canvas" class="hidden"></canvas>
+        </div>
+
+        <!-- Zone dinteraction -->
+        <div class="controls">
+            <button id="capture-btn" class="primary-btn">Analyser l'oeuvre</button>
+            
+            <!-- Ces boutons apparaîtront une fois lanalyse terminée -->
+            <div class="audio-controls hidden" id="audio-panel">
+                <button id="play-btn" class="secondary-btn">Jouer le Son</button>
+                <button id="stop-btn" class="danger-btn">Arrêter</button>
+            </div>
+        </div>
+
+        <div class="feedback">
+            <p id="status-text">Autorisez l'accès à la caméra pour commencer.</p>
+        </div>
+    </main>
+
+    <!-- Le script sera ajouté ici -->
+    <!-- <script src="app.js"></script> -->
+</body>
+</html>
