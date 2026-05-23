@@ -1,77 +1,68 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
-import torch
-import torchvision.transforms as transforms
 from PIL import Image
 import io
-
-# 1. On importe TA classe depuis le fichier model.py
-from model import ImageToSoundResNet
+import numpy as np
 
 app = FastAPI(title="Art2Sound API")
 
-# 2. Configuration CORS : indispensable pour que le front-end web puisse parler à l'API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # En hackathon on ouvre tout, en prod on met l'URL du front
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 3. Chargement global du modèle (s'exécute au lancement du serveur)
-print("Chargement du modèle PyTorch...")
-model = ImageToSoundResNet(num_audio_params=10)
-model.eval()
-
-# 4. Pipeline de prétraitement officiel pour ResNet (ImageNet stats)
-preprocess = transforms.Compose([
-    transforms.Resize(256),          # Redimensionne
-    transforms.CenterCrop(224),      # Coupe un carré parfait au centre
-    transforms.ToTensor(),           # Transforme en Tenseur PyTorch
-    transforms.Normalize(            # Normalise les couleurs
-        mean=[0.485, 0.456, 0.406], 
-        std=[0.229, 0.224, 0.225]
-    ),
-])
-
-# 5. La route qui reçoit l'image
 @app.post("/analyze")
 async def analyze_image(file: UploadFile = File(...)):
     try:
-        # Lire le fichier envoyé
         image_bytes = await file.read()
-        
-        # L'ouvrir avec Pillow et forcer le mode RGB (évite les bugs avec les PNG transparents)
         image = Image.open(io.BytesIO(image_bytes)).convert("RGB")
-        
-        # Prétraiter l'image (passe de Image PIL à Tenseur)
-        input_tensor = preprocess(image)
-        
-        # Ajouter la dimension du batch : [3, 224, 224] devient [1, 3, 224, 224]
-        input_batch = input_tensor.unsqueeze(0)
-        
-        # Inférence
-        with torch.no_grad():
-            output = model(input_batch)
-            
-        # Extraire les 10 valeurs du tenseur
-        params = output.squeeze().tolist()
-        
-        # Renvoie un joli JSON au navigateur web
+        image = image.resize((224, 224))
+        pixels = np.array(image) / 255.0  # valeurs entre 0 et 1
+
+        r = pixels[:, :, 0]
+        g = pixels[:, :, 1]
+        b = pixels[:, :, 2]
+
+        # Luminosité moyenne
+        brightness = float(np.mean(pixels))
+
+        # Contraste (écart-type de la luminosité)
+        gray = 0.299 * r + 0.587 * g + 0.114 * b
+        texture = float(np.std(gray))
+
+        # Température de couleur : chaud (rouge) vs froid (bleu)
+        harmony = float(np.mean(r) - np.mean(b) + 0.5)
+        harmony = max(0.0, min(1.0, harmony))
+
+        # Saturation moyenne
+        max_rgb = np.max(pixels, axis=2)
+        min_rgb = np.min(pixels, axis=2)
+        saturation = float(np.mean(max_rgb - min_rgb))
+
+        # Dominante verte (calme vs agité)
+        green_ratio = float(np.mean(g) / (np.mean(r) + np.mean(g) + np.mean(b) + 1e-5))
+
+        # Complexité visuelle (gradient moyen)
+        grad_x = np.abs(np.diff(gray, axis=1)).mean()
+        grad_y = np.abs(np.diff(gray, axis=0)).mean()
+        complexity = float((grad_x + grad_y) / 2)
+        complexity = min(1.0, complexity * 5)
+
         return {
-            "harmony": params[0],
-            "texture": params[1],
-            "brightness": params[2],
-            "reverb": params[3],
-            "param_5": params[4],
-            "param_6": params[5],
-            "param_7": params[6],
-            "param_8": params[7],
-            "param_9": params[8],
-            "param_10": params[9]
+            "harmony":    round(harmony, 4),
+            "texture":    round(min(1.0, texture * 4), 4),
+            "brightness": round(brightness, 4),
+            "reverb":     round(saturation, 4),
+            "param_5":    round(green_ratio * 3, 4),
+            "param_6":    round(float(np.mean(b)), 4),
+            "param_7":    round(complexity, 4),
+            "param_8":    round(float(np.std(r)), 4),
+            "param_9":    round(float(np.std(b)), 4),
+            "param_10":   round(float(np.mean(max_rgb)), 4),
         }
-        
+
     except Exception as e:
-        # Toujours utile pour déboguer si une image est corrompue
         return {"error": str(e)}
